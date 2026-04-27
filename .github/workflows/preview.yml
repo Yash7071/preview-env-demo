@@ -1,0 +1,47 @@
+name: Deploy Ephemeral Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Execute Deployment via SSH
+        uses: appleboy/ssh-action@master
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO_URL: ${{ github.event.pull_request.head.repo.clone_url }}
+          BRANCH_NAME: ${{ github.event.pull_request.head.ref }}
+        with:
+          host: ${{ secrets.EC2_HOST_IP }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: PR_NUMBER, REPO_URL, BRANCH_NAME
+          script: |
+            echo "🚀 Deploying PR #$PR_NUMBER from branch $BRANCH_NAME..."
+            
+            # 1. Create a unique, isolated directory for this PR
+            mkdir -p ~/previews/pr-$PR_NUMBER
+            cd ~/previews/pr-$PR_NUMBER
+            
+            # 2. Clean up any previous code from older commits
+            rm -rf code
+            
+            # 3. Clone the exact PR branch code
+            git clone -b $BRANCH_NAME $REPO_URL code
+            cd code
+            
+            # 4. Generate a dynamic port (PR 1 = Port 8001, PR 2 = Port 8002)
+            PORT=$((8000 + PR_NUMBER))
+            
+            # 5. Stop and remove the old container if this PR was updated
+            docker stop pr-$PR_NUMBER-app || true
+            docker rm pr-$PR_NUMBER-app || true
+            
+            # 6. Build the new Docker image and run it
+            docker build -t pr-$PR_NUMBER-image .
+            docker run -d --name pr-$PR_NUMBER-app -p $PORT:80 pr-$PR_NUMBER-image
+            
+            echo "✅ Deployment Successful! Container running on Port $PORT"
