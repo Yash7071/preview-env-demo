@@ -42,6 +42,6 @@ jobs:
             
             # 6. Build the new Docker image and run it
             docker build -t pr-$PR_NUMBER-image .
-            docker run -d --name pr-$PR_NUMBER-app -p $PORT:80 pr-$PR_NUMBER-image
+            docker run -d --restart unless-stopped --name pr-$PR_NUMBER-app -p $PORT:80 pr-$PR_NUMBER-image
             
             echo "✅ Deployment Successful! Container running on Port $PORT"
